@@ -44,7 +44,7 @@ main:
 	li $t5, 0
 	li $t2, BASE_ADDRESS
 	 
-	li $t1, 0x00804010 # $t1 stores the sky colour code
+	li $t1, 0x00ffffff # $t1 stores the sky colour code
 	li $t3, 0x00406080 # $t1 stores the floor colour code
 	
 	j paintwhite
@@ -58,14 +58,22 @@ paintwhite: 	beq $t5, 6152, before # IF current pixel is at the end of screen we
 		j paintwhite
 
 before: li $t5, 0
-paintfloor: 	beq $t5, 2048, END # IF current pixel is at the end of screen we exit program
+paintfloor: 	beq $t5, 240, before2 # IF current pixel is at the end of screen we exit program
 		
 		sw $t1,0($t2)
 		addi $t2, $t2, 4
 		addi $t5, $t5, 4
 		
 		j paintfloor
-
+		
+before2: li $t5, 0
+paintwhiteagain: beq $t5, 1808, END # IF current pixel is at the end of screen we exit program
+		
+		sw $t3,0($t2)
+		addi $t2, $t2, 4
+		addi $t5, $t5, 4
+		
+		j paintwhiteagain
 
 		
 END: 	li $v0, 10 # terminate the program gracefully
