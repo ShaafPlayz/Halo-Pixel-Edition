@@ -64,7 +64,8 @@ LevelOneHeli: .word 0x211f1e, 0x211f1e, 0x211f1e, 0x211f1e, 0x211f1e, 0x211f1e, 
 
 
 
-BulletsLocation: .space 400	# Array of 100 Integers
+BulletsX: .space 400	# Array of 100 Integers
+BulletsY: .space 400	# Array of 100 Integers
 BulletsHealth: .space 400	# Array of 100 Integers
 
 .eqv BLACK 0x000000
@@ -74,12 +75,12 @@ BulletsHealth: .space 400	# Array of 100 Integers
 .eqv WALL 0x5fcef9
 .eqv FLOOR 0x5fcef9
 
-.eqv LAVA 0xed1c24
+.eqv LAVA 0xd83a32
 .eqv BASE_ADDRESS 0x10008000
 .eqv MAX_ADDRESS 0x10010000
 .eqv FPS 20
 .eqv INTERVAL 3
-.eqv INTERVALEND 1000
+.eqv INTERVALEND 1500
 
 .text
 .globl main
@@ -271,6 +272,7 @@ load_splash_screen:
     	li $t7, 5
     	li $t3, 0		   	# Aids in jumping to next layer on 3 
     				   	# (jumps 128 pixels ahead)
+    	jal caladdressFUNC
 	add $t2, $t2, $s5         	# Jumps to calculated address on Bitmap
 	add $t6, $t6, $s5         	# Jumps to calculated address for Image
     	ErasePlayer:
@@ -290,36 +292,120 @@ load_splash_screen:
     		
     		j ErasePlayer
     	EraseComplete:
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
     	# ==============Erase Bullet========================
     	bgtz $k1, EraseBulletLoop
     	j ERASEcomplete
     	EraseBulletLoop:
-    		li $a3, 0		# a3 = 0
-    		la $t6, BulletsLocation		# t6 = addr(BULLET)
-    		la $t2, LevelOne		# Load Level Image -> t2
+    	#===========================================
+		# Save X, Y to Stack
+    		addi $sp, $sp, 4
+    		sw $s0, 0($sp)
+    		addi $sp, $sp, 4
+    		sw $s1, 0($sp)
     		
+    		#=== Setup Variables=========================================
+    		li $a3, 0		# a3 = 0################
+    		li $t7, 0		# temp B[i] 
     		
     		EraseBullet:
-    		addi $a3, $a3, 4	# a3 = a3 + 4
-    		add $t7, $t6, $a3	# t7 = addr(BULLET) + a3
-    		lw $t3, 0($t7)		# t3 = (BULLET)[i]
+    		addi $a3, $a3, 4	# a3 = a3 + 4##########
     		
-    		subi $t3, $t3, 4	# Move one Pixel Back
+    		############################
+    		#======Get STATUS=========
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $a3	# t6 = addr(STATUS) + a3
+    		lw $t2, 0($t6)		# Get Bullet Status
+    		beq $t2, 0, BulletEnd2	# If Bullet is dead we skip Update
+    		############################
     		
-    		add $t2, $t3, $t2       # Jumps to calculated address for Image
-		lw $t1, 0($t2)     	# Load pixel from Image
-		
-    		sw $t1, 0($t3)     	# Paint Pixel On Bullet Loc
-    		addi $t3, $t3, 4	# Move one Pixel Ahead
+    		#
+    		#	GET __X__ BULLET -> s1
+    		#
+    		la $t6, BulletsX
+    		add $t7, $t6, $a3	# t7 = addr(X) + a3
+    		lw $s1, 0($t7)		# s1 = (X)[i]
     		
-    		addi $t2, $t3, 4       	# Move one Pixel Ahead in Image
-		lw $t1, 0($t2)     	# Load pixel from Image
     		
-    		sw $t1, 0($t3)     	# Paint Pixel On Bullet Loc
+    		#
+    		#	GET __Y__ BULLET -> s0
+    		#
+    		la $t6, BulletsY
+    		add $t7, $t6, $a3	# t7 = addr(Y) + a3
+    		lw $s0, 0($t7)		# s0 = (Y)[i]
+    	####################REAL WORK BELOW########################
     		
-    		bne $a3, $k1, EraseBullet	# if a3 != k1
+    		
+    		la $t1, LevelOne		# Load Level Image -> t2
+    		li $t2, BASE_ADDRESS	# Reset BaseAddress
+    		
+    		jal caladdressFUNC	# Calculate Player Location
+    		add $t2, $t2, $s5	# Jumps to calculated address for printing
+    		add $t1, $t1, $s5	# Jumps to calculated Image for printing
+		      
+		    
+    		addi $t2, $t2, -4	# Move one Pixel Behind
+    		addi $t1, $t1, -4	# Move one Pixel Behind
+    		lw $t7, 0($t1)     	# Load pixel from Image
+    		
+    		sw $t7, 0($t2)     	# Paint Color On Bitmap
+    		
+    		
+    		addi $t2, $t2, 4	# Move one Pixel Ahead
+    		addi $t1, $t1, 4	# Move one Pixel Ahead
+    		lw $t7, 0($t1)     	# Load pixel from Image
+    		sw $t7, 0($t2)     	# Paint Color On Bitmap
+    		
+    		
+    		
+    	###########################################################
+    	####################SAVE LOCATIONS####################
+    		#======SAVE X LOC=========
+    		la $t6, BulletsX
+    		add $t6, $t6, $a3	# t6 = addr(X) + a3
+    		
+    		addi $s1, $s1, 2	# X = +2 Pixels
+    		sw $s1, 0($t6)		# Saving X Location
+    		
+    		
+    		#======SAVE Y LOC=========
+    		la $t6, BulletsY
+    		add $t6, $t6, $a3	# t6 = addr(Y) + a3
+    		sw $s0, 0($t6)		# Saving Y Location
+    		
+    		addi $s1, $s1, -125
+    		bgtz $s1, BulletStatusToDead # if Bullet X axis value is 120 then
+    						# the bullet is set to dead
+    		j BulletEnd2
+    		BulletStatusToDead:
+    		
+    		#======Dead STATUS=========
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $a3	# t6 = addr(STATUS) + k1
+    		li $t2, 0		# Set Bullet to Daead -> 0
+    		sw $t2, 0($t6)
+
+    		
+    	###########################################################	      
+    		#===Bullet Loop Condition=====================	
+    		BulletEnd2:	
+    		bne $a3, $k1, EraseBullet		# if a3 != k1
+    		j FinishBullet2
+    		
+    		FinishBullet2:
     		li $a3, 0		# Reset a3 value to 0
-    	# =========================================================
+    		li $t8, 0		# Reset
+    		
+    		# Load X, Y from Stack
+    		lw $s1, 0($sp)
+    		addi $sp, $sp, -4
+    		lw $s0, 0($sp)
+    		addi $sp, $sp, -4	
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
     	ERASEcomplete:
         # =========Input Checking==================================
         checkinput:
@@ -511,6 +597,13 @@ load_splash_screen:
     		addi $sp, $sp, -4	
         
     	NOHIT3:
+#####################################################################################################################
+#############################BULLET COLLISION#################################################################
+#####################################################################################################################
+    	
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
     	# ===============Check LAVA Below==============================
         LAVACHECK:
         move $a1, $s0 				# Save Y to a1
@@ -734,43 +827,152 @@ load_splash_screen:
     	bgtz $k1, UPDATEBULLET
     	j LevelUpdateComplete
     	SpawnBullet:
+    		addi $k1, $k1, 4	# k1 = k1 + 4
     		li $a3, 0		# Set a3 to 0 so we know we dont have to Spawn Bullet Again
     					# 
     		li $t2, BASE_ADDRESS	# Reset BaseAddress
     		jal caladdressFUNC	# Calculate Player Location
     		add $t2, $t2, $s5	# Jumps to calculated address for printing
-    		addi $t2, $t2, 12	# Jump 3 Pixels in front of the player
+    		addi $t2, $t2, 8	# Jump 3 Pixels in front of the player
     		
     		li $t1, 0xffffff     	# Load Blue Color
     		sw $t1, 0($t2)     	# Paint Color On Bitmap
     		addi $t2, $t2, 4	# Move one Pixel Ahead
     		sw $t1, 0($t2)     	# Paint Color On Bitmap
     		
+    		#======SAVE X LOC=========
+    		la $t6, BulletsX
+    		add $t6, $t6, $k1	# t6 = addr(X) + k1
     		
-    		la $t6, BulletsLocation		# t6 = addr(BULLET)
-    		addi $k1, $k1, 4	# k1 = k1 + 4
-    		add $t6, $t6, $k1	# t6 = addr(BULLET) + k1
-    		sw $t2, 0($t6)		# (BULLET)[i] = t2
+    		li $t2, 3		# 3 pixels in front of player
+    		add $t2, $t2, $s1	# t2 = s1 X address of player 
+    		sw $t2, 0($t6)		# Saving X Location
+    		
+    		#======SAVE Y LOC=========
+    		la $t6, BulletsY
+    		add $t6, $t6, $k1	# t6 = addr(Y) + k1
+    		
+    		sw $s0, 0($t6)		# Saving Y Location
+    		
+    		
+    		
+    		#======SAVE STATUS=========
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $k1	# t6 = addr(STATUS) + k1
+    		li $t2, 1		# Set Bullet to Alive -> 1
+    		sw $t2, 0($t6)
+    				
+    	
     		
     		j LevelUpdateComplete	# Jump To End Of Level
     		
     	UPDATEBULLET:
 		#===========================================
-    		li $a3, 0		# a3 = 0
+		# Save X, Y to Stack
+    		addi $sp, $sp, 4
+    		sw $s0, 0($sp)
+    		addi $sp, $sp, 4
+    		sw $s1, 0($sp)
+    		
+    		#=== Setup Variables=========================================
+    		li $a3, 0		# a3 = 0################
     		li $t7, 0		# temp B[i] 
-    		la $t6, BulletsLocation	# t6 = addr(BULLET)
+    		
     		MoveBullet:
-    		addi $a3, $a3, 4	# a3 = a3 + 4
-    		add $t7, $t6, $a3	# t6 = addr(BULLET) + a3
-    		lw $t2, 0($t7)		# t2 = (BULLET)[i]
+    		addi $a3, $a3, 4	# a3 = a3 + 4##########
+    		
+    		############################
+    		#======Get STATUS=========
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $a3	# t6 = addr(STATUS) + a3
+    		lw $t2, 0($t6)		# Get Bullet Status
+    		beq $t2, 0, BulletEnd	# If Bullet is dead we skip Update
+    		############################
+    		
+    		#
+    		#	GET __X__ BULLET -> s1
+    		#
+    		la $t6, BulletsX
+    		add $t7, $t6, $a3	# t7 = addr(X) + a3
+    		lw $s1, 0($t7)		# s1 = (X)[i]
+    		
+    		
+    		#
+    		#	GET __Y__ BULLET -> s0
+    		#
+    		la $t6, BulletsY
+    		add $t7, $t6, $a3	# t7 = addr(Y) + a3
+    		lw $s0, 0($t7)		# s0 = (Y)[i]
+    	####################REAL WORK BELOW########################
+    		
+    		
+    		
+    		li $t2, BASE_ADDRESS	# Reset BaseAddress
+    		jal caladdressFUNC	# Calculate Player Location
+    		add $t2, $t2, $s5	# Jumps to calculated address for printing
+    		
+    		addi $t2, $t2, 4
+    		lw $t1, 0($t2)
+    		addi $t2, $t2, -4
+    		beq $t1, WALL, BulletDeadPrep
+    		j White
+    		
+    		BulletDeadPrep:
+    		li $s1, 125
+    		la $t6, BulletsX
+    		add $t6, $t6, $a3	# t6 = addr(X) + a3
+    		
+    		addi $s1, $s1, 2	# X = +2 Pixels
+    		sw $s1, 0($t6)		# Saving X Location
+    		j BulletDead
+    		
+    		White:
+		li $t1, 0xffffff     	# Load Blue Color
 		
-    		li $t1, 0xffffff     	# Load Blue Color
+		
+		
+		
     		addi $t2, $t2, 4	# Move one Pixel Ahead
     		sw $t1, 0($t2)     	# Paint Color On Bitmap
     		addi $t2, $t2, 4	# Move one Pixel Ahead
     		sw $t1, 0($t2)     	# Paint Color On Bitmap
     		
-    		sw $t2, 0($t7)				# (BULLET)[i] = t2    
+    		
+    		# Bullet Dead Condition
+    		beq $t2, WALL, ShipToEnd
+    		j SkipShipToEnd
+    		
+    		ShipToEnd:
+    		li $s1, 150
+    		
+    		SkipShipToEnd:
+    		
+    	###########################################################
+    	####################SAVE LOCATIONS####################
+    		#======SAVE X LOC=========
+    		la $t6, BulletsX
+    		add $t6, $t6, $a3	# t6 = addr(X) + a3
+    		
+    		addi $s1, $s1, 2	# X = +2 Pixels
+    		sw $s1, 0($t6)		# Saving X Location
+    		
+    		
+    		#======SAVE Y LOC=========
+    		la $t6, BulletsY
+    		add $t6, $t6, $a3	# t6 = addr(Y) + a3
+    		sw $s0, 0($t6)		# Saving Y Location
+    		j BulletEnd
+    		
+    		
+    		# Set Bullet TO Dead
+    		BulletDead:
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $s3	# t6 = addr(STATUS) + k1
+    		li $t2, 0		# Set Bullet to Alive -> 1
+    		sw $t2, 0($t6)
+		#################
+    		
+    	###########################################################	      
     		#===Bullet Loop Condition=====================	
     		BulletEnd:	
     		bne $a3, $k1, MoveBullet		# if a3 != k1
@@ -779,6 +981,12 @@ load_splash_screen:
     		FinishBullet:
     		li $a3, 0		# Reset a3 value to 0
     		li $t8, 0		# Reset
+    		
+    		# Load X, Y from Stack
+    		lw $s1, 0($sp)
+    		addi $sp, $sp, -4
+    		lw $s0, 0($sp)
+    		addi $sp, $sp, -4	
     		#=============================================
     		j LevelUpdateComplete
     		
@@ -1079,14 +1287,14 @@ checkKeyboardInput:
         beq $t8, 0x77, jump 		# W
         beq $t8, 0x64, walkForward	# D
         beq $t8, 0x61, walkBackwards	# A
-        #beq $t8, 0x66, fire		# F
+        beq $t8, 0x66, fire		# F
         beq $t8, 0x72, restartGame	# R (Restart Game)
-        beq $t8, 0x71, LOSE		# Q (END Game)
+        beq $t8, 0x71, END		# Q (END Game)
     
     Jumptocaller: jr $ra
     
 LOSE:	
-	li $t7, 5
+	li $s0, 5
 	la $t6, DEFEAT5
 	j STARTDEFEAT
 	four:
@@ -1110,16 +1318,51 @@ LOSE:
         	addi $t2, $t2, 4  # Move to next position on bitmap
         	addi $t6, $t6, 4  # Move to next position on image
         	bne $t2, $t4, buildDefeatScreen # if not at max -> restart loop
-        	subi $t7, $t7, 1
+        	subi $s0, $s0, 1
+        	
+        	# Score ================================================
+        	beq $s7, 0, updateScoreZero2		# Score Zero 
+    		beq $s7, 1, updateScoreOne2		# Score One
+    		beq $s7, 2, updateScoreTwo2		# Score Two
+    		beq $s7, 3, updateScoreThree2		# Score Three
+    		beq $s7, 4, updateScoreThree2		# Go To Helicopter
+    		updateScoreZero2: la $t6, ZeroScore
+    				j SetupScoreLogic2
+    		updateScoreOne2: la $t6, OneScore
+    				j SetupScoreLogic2
+    		updateScoreTwo2: la $t6, TwoScore
+    				j SetupScoreLogic2
+   		updateScoreThree2: la $t6, ThreeScore
+    				j SetupScoreLogic2
+
+   		SetupScoreLogic2:
+    			li $t2, BASE_ADDRESS
+    			addi $t2, $t2, 3804
+    			li $t3, 0				# Layer Helper Horizontal
+    			li $t7, 12				# Layer Helper Vertical
+       			ScoreUpdate2:
+         			lw $t1, 0($t6)    		# Loads pixel from image
+         			sw $t1, 0($t2)    		# Puts pixel into bitmap
+         	
+         			addi $t2, $t2, 4  		# Move to next position on bitmap
+        			addi $t6, $t6, 4  		# Move to next position on image
+        		
+         			addi $t3, $t3, 1		#t3 + 1 Horizontal
+         			bne $t3, 12, ScoreUpdate2
+         			li $t3, 0			# t3 = 0
+         			subi $t7, $t7, 1		#t7 + 1 Vertical
+         			addi $t2, $t2, 464  		# Move to next position on bitmap
+         			bne $t7, 0, ScoreUpdate2
+         	#=========================================
         	# The following syscall makes the MIPS sleep for 1 seconds
     		li $v0, 32
     		li $a0, INTERVALEND
     		syscall
-        	beq $t7, 4, four 
-        	beq $t7, 3, three
-        	beq $t7, 2, two
-        	beq $t7, 1, one
-        	beq $t7, 0, DefeatLoadingScreen
+        	beq $s0, 4, four 
+        	beq $s0, 3, three
+        	beq $s0, 2, two
+        	beq $s0, 1, one
+        	beq $s0, 0, DefeatLoadingScreen
         	
         	
        	DefeatLoadingScreen:
