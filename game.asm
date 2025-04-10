@@ -78,19 +78,18 @@ BulletsHealth: .space 400	# Array of 100 Integers
 .eqv LAVA 0xd83a32
 .eqv BASE_ADDRESS 0x10008000
 .eqv MAX_ADDRESS 0x10010000
-.eqv FPS 20
+.eqv FPS 35
 .eqv INTERVAL 3
 .eqv INTERVALEND 1500
 
 .text
 .globl main
 main:
-    	li $t5, 0xffff0000 
+    	 
 	li $t2, BASE_ADDRESS
 	li $t4, MAX_ADDRESS
-	 
-	li $t0, 0x00000000 # $t0 stores black
-	li $t1, 0xffffffff # $t1 stores current color
+	
+	li $t1, 0xffffff # $t1 stores current color
 	                   # Defult: White
     
     # The register Below is very important
@@ -136,7 +135,7 @@ load_splash_screen:
     MainMenuHyperJump:
     # Builds Main Menu
     li $s2, 0 # Set Game State to 0 (menu functions)
-    li $k0, 0 # Set our first toggle to 0
+    li $t3, 0 # Set our first toggle to 0
     LoadMainMenuPlay:
     la $t6, MainMenuPlay
     li $t2, BASE_ADDRESS
@@ -157,20 +156,20 @@ load_splash_screen:
    	       syscall
                j KEYBOARD
         WSpressed: 
-        	  beq $k0, 0, GotoEXIT
-        	  beq $k0, 1, GotoPLAY
+        	  beq $t3, 0, GotoEXIT
+        	  beq $t3, 1, GotoPLAY
         	  
-        GotoPLAY: li $k0, 0
+        GotoPLAY: li $t3, 0
         	  j LoadMainMenuPlay 
         	  
         GotoEXIT: la $t6, MainMenuExit
         	  li $t2, BASE_ADDRESS
-        	  li $k0, 1
+        	  li $t3, 1
         	  j buildMainMenu  
         	  
 	SelectCurrent:
-		  beq $k0, 0, PrepLogicOne
-    	  beq $k0, 1, END
+		  beq $t3, 0, PrepLogicOne
+    	  beq $t3, 1, END
        	# =====================================================
        	# We loop this label continously unless the plater pressed P (pause)
         # On every Loop we check the following:
@@ -193,9 +192,10 @@ load_splash_screen:
        	li $s2, 1 			# Set Game State to 1 (In-Game Functions)
        	li $s0, 46 		   	# Y -> s0
     	li $s1, 21 		   	# X -> s1
-    	li $k1, 0			# 0 Bullets
+    	li $t9, 0			# 0 Bullets
     	li $a3, 0			# No Firing
     	li $s7, 0 			# GAME SCORE
+    	li $s3, 2			# Jumps Available (Resets to 2 when we hhit floor)
     LevelOneLogic:
     	    
     	# Win Heli Proximity =====================================
@@ -296,7 +296,7 @@ load_splash_screen:
 #####################################################################################################################
 #####################################################################################################################
     	# ==============Erase Bullet========================
-    	bgtz $k1, EraseBulletLoop
+    	bgtz $t9, EraseBulletLoop
     	j ERASEcomplete
     	EraseBulletLoop:
     	#===========================================
@@ -391,7 +391,7 @@ load_splash_screen:
     	###########################################################	      
     		#===Bullet Loop Condition=====================	
     		BulletEnd2:	
-    		bne $a3, $k1, EraseBullet		# if a3 != k1
+    		bne $a3, $t9, EraseBullet		# if a3 != k1
     		j FinishBullet2
     		
     		FinishBullet2:
@@ -422,6 +422,10 @@ load_splash_screen:
                           		# -> 1 Pixel
                 j NoInput
             jump:
+            	bgtz $s3, JumpAvailable
+            	j NoInput
+            	JumpAvailable:
+            	addi $s3, $s3, -1	# One Jump Used
                 subi $s0, $s0, 15 	# Move Player Upwards by
                                     	# -> 5 Pixel
                 j NoInput
@@ -433,9 +437,444 @@ load_splash_screen:
             	
         NoInput:        
         # =========Collision Check=================================
-        # PICK UP Check ===========================================
+####################################################################################################################
+        # Hearts PickUp Check ===========================================
+        jal HeartsProximityLvlOne
+#####################################################################################################################
+############################# BULLET Heart Collision Detection ######################################################
+#####################################################################################################################
+    	
+#####################################################################################################################
+#####################################################################################################################
+#####################################################################################################################
+    	# ===============Check LAVA Below==============================
+        LAVACHECK:
+        move $a1, $s0 				# Save Y to a1
+        move $a0, $s1 				# Save X to a0
+        addi $s1, $s1, 1 			# Pixel on below foot X
+        addi $s0, $s0, 6 			# Move Y 5 down to check the floor
+        		 			
+        jal caladdressFUNC
+        la $t6, LevelOne
+        add $t6, $t6, $s5 			# Go to the floor under character
         
-        #===Heart One========================
+        lw $t7, 0($t6) 				# Load the floor color from memory -> t7
+        li $a2, LAVA     			# Get Floor Color
+        
+        beq $a2, $t7, LOSE 			# if front feet in LAVA
+        
+        move $s0, $a1
+        move $s1, $a0 				# Save X from a0
+        # ===============Check WALL FRONT================================
+        move $a0, $s1 # Save X to a0
+        move $a1, $s0 # Save Y to a1
+        addi $s1, $s1, 2 # Pixel on front foot X
+        addi $s0, $s0, 3 # Pixel on front foot Y
+        jal caladdressFUNC
+        # Check what is in front foot
+        la $t6, LevelOne
+        add $t6, $t6, $s5 # Go to the Wall in front
+        lw $t7, 0($t6) # Load the Wall color from memory -> t7
+        li $a2, WALL     # Get Wall Color
+        beq $a2, $t7, WALLAHEAD
+        # Save variable back to what they were
+        move $s1, $a0 # Save X from a0
+        move $s0, $a1 # Save Y from a1
+        j CHECKBEHIND
+        WALLAHEAD:
+        	subi $a0, $a0, 1 # subtract one for player does not move
+        	move $s1, $a0 # Save X from a0
+        	move $s0, $a1 # Save Y from a1
+        	
+        # ===============Check WALL BACK================================
+        CHECKBEHIND:
+        move $a0, $s1 				# Save X to a0
+        move $a1, $s0 				# Save Y to a1
+        addi $s0, $s0, 2 			# Pixel on back foot Y
+        jal caladdressFUNC
+        # Check what is in back foot
+        la $t6, LevelOne
+        add $t6, $t6, $s5 			# Go to the Wall in behind
+        lw $t7, 0($t6) 				# Load the Wall color from memory -> t7
+        li $a2, WALL     			# Get Wall Color
+        beq $a2, $t7, WALLBEHIND
+        # Save variable back to what they were
+        move $s1, $a0 				# Save X from a0
+        move $s0, $a1 				# Save Y from a1
+        j FLOORCHECK
+        WALLBEHIND:
+        	addi $a0, $a0, 1 		# add one for player does not move
+        	move $s1, $a0 			# Save X from a0
+        	move $s0, $a1 			# Save Y from a1
+        
+        # ===============Check Floor Ahead==============================
+        FLOORCHECK:
+        move $a1, $s0 				# Save Y to a1
+        move $a0, $s1 				# Save X to a0
+        addi $s1, $s1, 2 			# Pixel on below foot X
+        addi $s0, $s0, 5 			# Move Y 5 down to check the floor
+        		 			# we are standing on, if its blue
+        		 			# -> we dont enable gravity (otherwise fall down by 1)
+        jal caladdressFUNC
+        la $t6, LevelOne
+        add $t6, $t6, $s5 			# Go to the floor under character
+        lw $t7, 0($t6) 				# Load the floor color from memory -> t7
+        li $a2, FLOOR     			# Get Floor Color
+        bne $a2, $t7, FrontFeetAir 		# if front feet in air
+        move $s0, $a1
+        move $s1, $a0 				# Save X from a0
+        li $t3, 0 				# set no gravity
+        j noGRAVITY
+        FrontFeetAir:
+        move $s0, $a1
+        move $s1, $a0 				# Save X from a0
+        li $t3, 1 				# Set t3 to 0 if front feet in air
+        
+        # ===============Check Floor Behind==============================
+        FLOORCHECKback:
+        move $a1, $s0 				# Save Y to a1
+        addi $s0, $s0, 5 			# Move Y 5 down to check the floor
+        		 			# we are standing on, if its blue
+        		 			# -> we dont enable gravity (otherwise fall down by 1)
+        jal caladdressFUNC
+        la $t6, LevelOne
+        add $t6, $t6, $s5 			# Go to the floor under character
+        lw $t7, 0($t6) 				# Load the floor color from memory -> t7
+        li $a2, FLOOR     			# Get Floor Color
+        bne $a2, $t7, GRAVITY
+        move $s0, $a1
+        
+        j noGRAVITY
+        # =========Gravity Check===============================
+            GRAVITY:
+            	beq $t3, 0, noGRAVITY 		# if t3 = 1 -> front in air
+            			      		# but if t3 != 1 -> front on platform
+            	addi $a1, $a1, 1 		# Bring char down by 1 pixel
+            	move $s0, $a1      		# Set s0 with a1 contents
+            	move $s1, $a0 			# Save X from a0
+            	j SkipNoGravity
+        # =========No Gravity===================================
+        noGRAVITY:
+        	li $s3, 2	# Reload Double Jump -> 2 Available
+        SkipNoGravity:
+        # =========& Build Level If Not Built===================
+        beq $s7, 3, FinalHeliBuild		# If Level is Complete We will build the final level
+        beq $s2, 5, SkipLevelBuild 		# If level already built we dont build it again
+        
+        j VanillaLevelBuild
+    	# ===================================================== 
+    	FinalHeliBuild:
+    	# We now build Level
+        li $t2, BASE_ADDRESS
+        la $t6, LevelOneHeli
+    	HeliBuilder:
+    	    	lw $t1, 0($t6)     		# Load pixel from image
+     		sw $t1, 0($t2)     		# Paint pixel to bitmap
+    		addi $t2, $t2, 4
+    		addi $t6, $t6, 4
+    		bne $t2, $t4, HeliBuilder
+    		li $s7, 4	# Prevent This from Building Again
+    	j SkipLevelBuild  	
+    	  	  	
+	# ===================================================== 
+      	VanillaLevelBuild:  	
+        # We now build Level
+        li $t2, BASE_ADDRESS
+        la $t6, LevelOne
+    	LevelBuilder:
+    	    	lw $t1, 0($t6)     		# Load pixel from image
+     		sw $t1, 0($t2)     		# Paint pixel to bitmap
+    		addi $t2, $t2, 4
+    		addi $t6, $t6, 4
+    		bne $t2, $t4, LevelBuilder
+    		li $s2, 5 			# Mark Level as Built
+    		
+    	#=======================================================
+    	Hearts:
+    		
+    		li $t1, PICKUP	# Load Yellow Color
+    		# Save X, Y to Stack
+    		addu $sp, $sp, 4
+    		sw $s0, 0($sp)
+    		addi $sp, $sp, 4
+    		sw $s1, 0($sp)
+    		
+    		
+    		# Color One =========================
+    		# One Heart Logic
+    		li $t2, BASE_ADDRESS
+    		li $s0, 11 #Y
+    		li $s1, 25 #X
+    		# Location ^^
+    		# Print \/
+    		jal printHeart
+    		
+    		# Two Heart Logic
+    		li $t2, BASE_ADDRESS
+    		li $s0, 25 #Y
+    		li $s1, 80 #X
+    		# Location ^^
+    		# Print \/
+    		jal printHeart
+    		
+    		# Three Heart Logic
+    		li $t2, BASE_ADDRESS
+    		li $s0, 37 #Y
+    		li $s1, 116 #X
+    		# Location ^^
+    		# Print \/
+    		jal printHeart
+		# ==================================
+    		
+    		# Load X, Y from Stack
+    		lw $s1, 0($sp)
+    		addi $sp, $sp, -4
+    		lw $s0, 0($sp)
+    		subi $sp, $sp, -4
+    		
+    		
+    		li $s0, 46 		   	# Y -> s0
+    		li $s1, 21 		   	# X -> s1
+    		
+    		
+    		
+    	SkipLevelBuild:
+    	
+    	# =====================================================
+    	# Character Building
+    	jal caladdressFUNC	   		# Final Address -> s5
+    	
+    	la $t6, Player		   		# Load Player Image -> t6 (15 pixels only)
+    	li $t2, BASE_ADDRESS
+    	li $t7, 5
+    	li $t3, 0		   # Aids in jumping to next layer on 3 
+    				   # (jumps 128 pixels ahead)
+	add $t2, $t2, $s5         # Jumps to calculated address for printing
+    	CharacterBuilding:
+    		lw $t1, 0($t6)     # Load pixel from image
+    		sw $t1, 0($t2)     # Paint pixel to bitmap
+    		
+    		addi $t6, $t6, 4   # Move to next position on Image
+    		addi $t2, $t2, 4   # Move to next position on Bitmap
+    		
+    		addi $t3, $t3, 1   # One pixel done -> 2 more to go
+    		bne $t3, 3, CharacterBuilding # 3 pixels not printed yet -> print more!!!
+    		li $t3, 0		      # Reset layer progress -> 0
+    		subi $t7, $t7, 1	      # one layer has been buily -> remove one from t7
+    		beq $t7, 0, Characterbuilt
+    		
+    		addi $t2, $t2, 500   # Move to next layer on Bitmap
+    		j CharacterBuilding
+    		
+    	Characterbuilt:
+    	# ==============Building Bullet========================
+    	
+    	beq $a3, 1, SpawnBullet
+    	bgtz $t9, UPDATEBULLET
+    	j LevelUpdateComplete
+    	SpawnBullet:
+    		addi $t9, $t9, 4	# k1 = k1 + 4
+    		li $a3, 0		# Set a3 to 0 so we know we dont have to Spawn Bullet Again
+    					# 
+    		li $t2, BASE_ADDRESS	# Reset BaseAddress
+    		jal caladdressFUNC	# Calculate Player Location
+    		add $t2, $t2, $s5	# Jumps to calculated address for printing
+    		addi $t2, $t2, 8	# Jump 3 Pixels in front of the player
+    		
+    		li $t1, 0xffffff     	# Load Blue Color
+    		sw $t1, 0($t2)     	# Paint Color On Bitmap
+    		addi $t2, $t2, 4	# Move one Pixel Ahead
+    		sw $t1, 0($t2)     	# Paint Color On Bitmap
+    		
+    		#======SAVE X LOC=========
+    		la $t6, BulletsX
+    		add $t6, $t6, $t9	# t6 = addr(X) + k1
+    		
+    		li $t2, 3		# 3 pixels in front of player
+    		add $t2, $t2, $s1	# t2 = s1 X address of player 
+    		sw $t2, 0($t6)		# Saving X Location
+    		
+    		#======SAVE Y LOC=========
+    		la $t6, BulletsY
+    		add $t6, $t6, $t9	# t6 = addr(Y) + k1
+    		
+    		sw $s0, 0($t6)		# Saving Y Location
+    		
+    		
+    		
+    		#======SAVE STATUS=========
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $t9	# t6 = addr(STATUS) + k1
+    		li $t2, 1		# Set Bullet to Alive -> 1
+    		sw $t2, 0($t6)
+    				
+    	
+    		
+    		j LevelUpdateComplete	# Jump To End Of Level
+    		
+    	UPDATEBULLET:
+		#===========================================
+		# Save X, Y to Stack
+    		addi $sp, $sp, 4
+    		sw $s0, 0($sp)
+    		addi $sp, $sp, 4
+    		sw $s1, 0($sp)
+    		
+    		#=== Setup Variables=========================================
+    		li $a3, 0		# a3 = 0################
+    		li $t7, 0		# temp B[i] 
+    		
+    		MoveBullet:
+    		addi $a3, $a3, 4	# a3 = a3 + 4##########
+    		
+    		############################
+    		#======Get STATUS=========
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $a3	# t6 = addr(STATUS) + a3
+    		lw $t2, 0($t6)		# Get Bullet Status
+    		beq $t2, 0, BulletEnd	# If Bullet is dead we skip Update
+    		############################
+    		
+    		#
+    		#	GET __X__ BULLET -> s1
+    		#
+    		la $t6, BulletsX
+    		add $t7, $t6, $a3	# t7 = addr(X) + a3
+    		lw $s1, 0($t7)		# s1 = (X)[i]
+    		
+    		
+    		#
+    		#	GET __Y__ BULLET -> s0
+    		#
+    		la $t6, BulletsY
+    		add $t7, $t6, $a3	# t7 = addr(Y) + a3
+    		lw $s0, 0($t7)		# s0 = (Y)[i]
+    	####################REAL WORK BELOW########################
+    		
+    		
+    		
+    		li $t2, BASE_ADDRESS	# Reset BaseAddress
+    		jal caladdressFUNC	# Calculate Player Location
+    		add $t2, $t2, $s5	# Jumps to calculated address for printing
+    		
+    		addi $t2, $t2, 4
+    		lw $t1, 0($t2)
+    		addi $t2, $t2, -4
+    		
+    		
+    		beq $t1, WALL, BulletDeadPrep
+    		beq $t1, PICKUP, BulletDeadPrepCoin
+    		beq $t1, PICKUPIN, BulletDeadPrepCoin
+    		j White
+    		
+    		
+    		BulletDeadPrepCoin:
+    		jal HeartsProximityLvlOne
+    		BulletDeadPrep:
+    		li $s1, 128
+    		la $t6, BulletsX
+    		add $t6, $t6, $a3	# t6 = addr(X) + a3
+    		sw $s1, 0($t6)		# Saving X Location
+    		j BulletDead
+    		
+    		White:
+		li $t1, 0xffffff     	# Load Blue Color
+
+    		addi $t2, $t2, 4	# Move one Pixel Ahead
+    		sw $t1, 0($t2)     	# Paint Color On Bitmap
+    		addi $t2, $t2, 4	# Move one Pixel Ahead
+    		sw $t1, 0($t2)     	# Paint Color On Bitmap
+		
+    	###########################################################
+    	####################SAVE LOCATIONS####################
+    		
+    		#======SAVE X LOC=========
+    		la $t6, BulletsX
+    		add $t6, $t6, $a3	# t6 = addr(X) + a3
+    		
+    		addi $s1, $s1, 2	# X = +2 Pixels
+    		sw $s1, 0($t6)		# Saving X Location
+    		
+    		
+    		#======SAVE Y LOC=========
+    		la $t6, BulletsY
+    		add $t6, $t6, $a3	# t6 = addr(Y) + a3
+    		sw $s0, 0($t6)		# Saving Y Location
+    		j BulletEnd
+    		
+    		
+    		
+    		# Set Bullet TO Dead
+    		BulletDead:
+    		la $t6, BulletsHealth
+    		add $t6, $t6, $a3	# t6 = addr(STATUS) + k1
+    		li $t2, 0	# Set Bullet to Alive -> 1
+    		sw $t2, 0($t6)
+		#################
+    		
+    	###########################################################	      
+    		#===Bullet Loop Condition=====================	
+    		BulletEnd:	
+    		bne $a3, $t9, MoveBullet		# if a3 != k1
+    		j FinishBullet
+    		
+    		FinishBullet:
+    		li $a3, 0		# Reset a3 value to 0
+    		li $t8, 0		# Reset
+    		
+    		# Load X, Y from Stack
+    		lw $s1, 0($sp)
+    		addi $sp, $sp, -4
+    		lw $s0, 0($sp)
+    		addi $sp, $sp, -4	
+    		#=============================================
+    		j LevelUpdateComplete
+    		
+    	LevelUpdateComplete:
+    		j LevelOneLogic	
+	
+LevelTwoPrep:
+	# Builds Level Complete Screen
+    	la $t6, LevelComplete 
+    	li $t2, BASE_ADDRESS
+        buildCompleteScreenOne:
+         	lw $t1, 0($t6)    # Loads pixel from image
+         	sw $t1, 0($t2)    # Puts pixel into bitmap
+        	addi $t2, $t2, 4  # Move to next position on bitmap
+        	addi $t6, $t6, 4  # Move to next position on image
+        	bne $t2, $t4, buildCompleteScreenOne # if not at max -> restart loop
+	
+	# The following syscall makes the MIPS sleep for 3 seconds
+    		li $v0, 32
+    		li $a0, 3000
+    		syscall
+    	# Builds Level Complete Screen
+    	la $t6, LevelComplete 
+    	li $t2, BASE_ADDRESS
+        buildCompleteScreenTwo:
+         	lw $t1, 0($t6)    # Loads pixel from image
+         	sw $t1, 0($t2)    # Puts pixel into bitmap
+        	addi $t2, $t2, 4  # Move to next position on bitmap
+        	addi $t6, $t6, 4  # Move to next position on image
+        	bne $t2, $t4, buildCompleteScreenTwo # if not at max -> restart loop
+
+        	
+			
+	j END	
+		
+# =====================================================
+# Under this line are all Functions
+# So we avoid running them by default so we jump to END
+jumptoend: j END
+# =======================================================================================================================
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ HELPER FUNCTIONS $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+# =======================================================================================================================
+HeartsProximityLvlOne:
+	# Push HyperJump Location To Stack
+	addu $sp, $sp, 4
+    	sw $ra, 0($sp)
+	##########################################
         	li $t7, 8
         	blt $t7, $s0, aaHeartOne
         	j NOHIT
@@ -552,11 +991,11 @@ load_splash_screen:
 		blt $s0, $t7, abHeartThree
 		j NOHIT3
 	abHeartThree:	
-		li $t7, 113
+		li $t7, 105
 		blt $t7, $s1, acHeartThree
 		j NOHIT3
 	acHeartThree:		
-    	li $t7, 118
+    	li $t7, 125
 		blt $s1, $t7, adHeartThreeKILL
 		j NOHIT3
 	adHeartThreeKILL:	
@@ -597,426 +1036,12 @@ load_splash_screen:
     		addi $sp, $sp, -4	
         
     	NOHIT3:
-#####################################################################################################################
-#############################BULLET COLLISION#################################################################
-#####################################################################################################################
+    	################################
+    	# Restore Old HyperJump Location
+    	lw $ra, 0($sp)
+    	addu $sp, $sp, -4
     	
-#####################################################################################################################
-#####################################################################################################################
-#####################################################################################################################
-    	# ===============Check LAVA Below==============================
-        LAVACHECK:
-        move $a1, $s0 				# Save Y to a1
-        move $a0, $s1 				# Save X to a0
-        addi $s1, $s1, 1 			# Pixel on below foot X
-        addi $s0, $s0, 6 			# Move Y 5 down to check the floor
-        		 			
-        jal caladdressFUNC
-        la $t6, LevelOne
-        add $t6, $t6, $s5 			# Go to the floor under character
-        
-        lw $t7, 0($t6) 				# Load the floor color from memory -> t7
-        li $a2, LAVA     			# Get Floor Color
-        
-        beq $a2, $t7, LOSE 			# if front feet in LAVA
-        
-        move $s0, $a1
-        move $s1, $a0 				# Save X from a0
-        # ===============Check WALL FRONT================================
-        move $a0, $s1 # Save X to a0
-        move $a1, $s0 # Save Y to a1
-        addi $s1, $s1, 2 # Pixel on front foot X
-        addi $s0, $s0, 3 # Pixel on front foot Y
-        jal caladdressFUNC
-        # Check what is in front foot
-        la $t6, LevelOne
-        add $t6, $t6, $s5 # Go to the Wall in front
-        lw $t7, 0($t6) # Load the Wall color from memory -> t7
-        li $a2, WALL     # Get Wall Color
-        beq $a2, $t7, WALLAHEAD
-        # Save variable back to what they were
-        move $s1, $a0 # Save X from a0
-        move $s0, $a1 # Save Y from a1
-        j CHECKBEHIND
-        WALLAHEAD:
-        	subi $a0, $a0, 1 # subtract one for player does not move
-        	move $s1, $a0 # Save X from a0
-        	move $s0, $a1 # Save Y from a1
-        	
-        # ===============Check WALL BACK================================
-        CHECKBEHIND:
-        move $a0, $s1 				# Save X to a0
-        move $a1, $s0 				# Save Y to a1
-        addi $s0, $s0, 2 			# Pixel on back foot Y
-        jal caladdressFUNC
-        # Check what is in back foot
-        la $t6, LevelOne
-        add $t6, $t6, $s5 			# Go to the Wall in behind
-        lw $t7, 0($t6) 				# Load the Wall color from memory -> t7
-        li $a2, WALL     			# Get Wall Color
-        beq $a2, $t7, WALLBEHIND
-        # Save variable back to what they were
-        move $s1, $a0 				# Save X from a0
-        move $s0, $a1 				# Save Y from a1
-        j FLOORCHECK
-        WALLBEHIND:
-        	addi $a0, $a0, 1 		# add one for player does not move
-        	move $s1, $a0 			# Save X from a0
-        	move $s0, $a1 			# Save Y from a1
-        
-        # ===============Check Floor Ahead==============================
-        FLOORCHECK:
-        move $a1, $s0 				# Save Y to a1
-        move $a0, $s1 				# Save X to a0
-        addi $s1, $s1, 2 			# Pixel on below foot X
-        addi $s0, $s0, 5 			# Move Y 5 down to check the floor
-        		 			# we are standing on, if its blue
-        		 			# -> we dont enable gravity (otherwise fall down by 1)
-        jal caladdressFUNC
-        la $t6, LevelOne
-        add $t6, $t6, $s5 			# Go to the floor under character
-        lw $t7, 0($t6) 				# Load the floor color from memory -> t7
-        li $a2, FLOOR     			# Get Floor Color
-        bne $a2, $t7, FrontFeetAir 		# if front feet in air
-        move $s0, $a1
-        move $s1, $a0 				# Save X from a0
-        li $t3, 0 				# set no gravity
-        j noGRAVITY
-        FrontFeetAir:
-        move $s0, $a1
-        move $s1, $a0 				# Save X from a0
-        li $t3, 1 				# Set t3 to 0 if front feet in air
-        
-        # ===============Check Floor Behind==============================
-        FLOORCHECKback:
-        move $a1, $s0 				# Save Y to a1
-        addi $s0, $s0, 5 			# Move Y 5 down to check the floor
-        		 			# we are standing on, if its blue
-        		 			# -> we dont enable gravity (otherwise fall down by 1)
-        jal caladdressFUNC
-        la $t6, LevelOne
-        add $t6, $t6, $s5 			# Go to the floor under character
-        lw $t7, 0($t6) 				# Load the floor color from memory -> t7
-        li $a2, FLOOR     			# Get Floor Color
-        bne $a2, $t7, GRAVITY
-        move $s0, $a1
-        
-        j noGRAVITY
-        # =========Gravity Check===============================
-            GRAVITY:
-            	beq $t3, 0, noGRAVITY 		# if t3 = 1 -> front in air
-            			      		# but if t3 != 1 -> front on platform
-            	addi $a1, $a1, 1 		# Bring char down by 1 pixel
-            	move $s0, $a1      		# Set s0 with a1 contents
-            	move $s1, $a0 			# Save X from a0
-        # =========No Gravity===================================
-        noGRAVITY:
-        # =========& Build Level If Not Built===================
-        beq $s7, 3, FinalHeliBuild		# If Level is Complete We will build the final level
-        beq $s2, 5, SkipLevelBuild 		# If level already built we dont build it again
-        
-        j VanillaLevelBuild
-    	# ===================================================== 
-    	FinalHeliBuild:
-    	# We now build Level
-        li $t2, BASE_ADDRESS
-        la $t6, LevelOneHeli
-    	HeliBuilder:
-    	    	lw $t1, 0($t6)     		# Load pixel from image
-     		sw $t1, 0($t2)     		# Paint pixel to bitmap
-    		addi $t2, $t2, 4
-    		addi $t6, $t6, 4
-    		bne $t2, $t4, HeliBuilder
-    		li $s7, 4	# Prevent This from Building Again
-    	j SkipLevelBuild  	
-    	  	  	
-	# ===================================================== 
-      	VanillaLevelBuild:  	
-        # We now build Level
-        li $t2, BASE_ADDRESS
-        la $t6, LevelOne
-    	LevelBuilder:
-    	    	lw $t1, 0($t6)     		# Load pixel from image
-     		sw $t1, 0($t2)     		# Paint pixel to bitmap
-    		addi $t2, $t2, 4
-    		addi $t6, $t6, 4
-    		bne $t2, $t4, LevelBuilder
-    		li $s2, 5 			# Mark Level as Built
-    		
-    	#=======================================================
-    	Hearts:
-    		
-    		li $t1, PICKUP	# Load Yellow Color
-    		# Save X, Y to Stack
-    		addu $sp, $sp, 4
-    		sw $s0, 0($sp)
-    		addi $sp, $sp, 4
-    		sw $s1, 0($sp)
-    		
-    		
-    		# Color One =========================
-    		# One Heart Logic
-    		li $t2, BASE_ADDRESS
-    		li $s0, 11 #Y
-    		li $s1, 25 #X
-    		# Location ^^
-    		# Print \/
-    		jal printHeart
-    		
-    		# Two Heart Logic
-    		li $t2, BASE_ADDRESS
-    		li $s0, 25 #Y
-    		li $s1, 80 #X
-    		# Location ^^
-    		# Print \/
-    		jal printHeart
-    		
-    		# Three Heart Logic
-    		li $t2, BASE_ADDRESS
-    		li $s0, 37 #Y
-    		li $s1, 116 #X
-    		# Location ^^
-    		# Print \/
-    		jal printHeart
-		# ==================================
-    		
-    		# Load X, Y from Stack
-    		lw $s1, 0($sp)
-    		addi $sp, $sp, -4
-    		lw $s0, 0($sp)
-    		subi $sp, $sp, -4
-    		
-    		
-    		li $s0, 46 		   	# Y -> s0
-    		li $s1, 21 		   	# X -> s1
-    		
-    		
-    		
-    	SkipLevelBuild:
-    	
-    	# =====================================================
-    	# Character Building
-    	jal caladdressFUNC	   		# Final Address -> s5
-    	
-    	la $t6, Player		   		# Load Player Image -> t6 (15 pixels only)
-    	li $t2, BASE_ADDRESS
-    	li $t7, 5
-    	li $t3, 0		   # Aids in jumping to next layer on 3 
-    				   # (jumps 128 pixels ahead)
-	add $t2, $t2, $s5         # Jumps to calculated address for printing
-    	CharacterBuilding:
-    		lw $t1, 0($t6)     # Load pixel from image
-    		sw $t1, 0($t2)     # Paint pixel to bitmap
-    		
-    		addi $t6, $t6, 4   # Move to next position on Image
-    		addi $t2, $t2, 4   # Move to next position on Bitmap
-    		
-    		addi $t3, $t3, 1   # One pixel done -> 2 more to go
-    		bne $t3, 3, CharacterBuilding # 3 pixels not printed yet -> print more!!!
-    		li $t3, 0		      # Reset layer progress -> 0
-    		subi $t7, $t7, 1	      # one layer has been buily -> remove one from t7
-    		beq $t7, 0, Characterbuilt
-    		
-    		addi $t2, $t2, 500   # Move to next layer on Bitmap
-    		j CharacterBuilding
-    		
-    	Characterbuilt:
-    	# ==============Building Bullet========================
-    	
-    	beq $a3, 1, SpawnBullet
-    	bgtz $k1, UPDATEBULLET
-    	j LevelUpdateComplete
-    	SpawnBullet:
-    		addi $k1, $k1, 4	# k1 = k1 + 4
-    		li $a3, 0		# Set a3 to 0 so we know we dont have to Spawn Bullet Again
-    					# 
-    		li $t2, BASE_ADDRESS	# Reset BaseAddress
-    		jal caladdressFUNC	# Calculate Player Location
-    		add $t2, $t2, $s5	# Jumps to calculated address for printing
-    		addi $t2, $t2, 8	# Jump 3 Pixels in front of the player
-    		
-    		li $t1, 0xffffff     	# Load Blue Color
-    		sw $t1, 0($t2)     	# Paint Color On Bitmap
-    		addi $t2, $t2, 4	# Move one Pixel Ahead
-    		sw $t1, 0($t2)     	# Paint Color On Bitmap
-    		
-    		#======SAVE X LOC=========
-    		la $t6, BulletsX
-    		add $t6, $t6, $k1	# t6 = addr(X) + k1
-    		
-    		li $t2, 3		# 3 pixels in front of player
-    		add $t2, $t2, $s1	# t2 = s1 X address of player 
-    		sw $t2, 0($t6)		# Saving X Location
-    		
-    		#======SAVE Y LOC=========
-    		la $t6, BulletsY
-    		add $t6, $t6, $k1	# t6 = addr(Y) + k1
-    		
-    		sw $s0, 0($t6)		# Saving Y Location
-    		
-    		
-    		
-    		#======SAVE STATUS=========
-    		la $t6, BulletsHealth
-    		add $t6, $t6, $k1	# t6 = addr(STATUS) + k1
-    		li $t2, 1		# Set Bullet to Alive -> 1
-    		sw $t2, 0($t6)
-    				
-    	
-    		
-    		j LevelUpdateComplete	# Jump To End Of Level
-    		
-    	UPDATEBULLET:
-		#===========================================
-		# Save X, Y to Stack
-    		addi $sp, $sp, 4
-    		sw $s0, 0($sp)
-    		addi $sp, $sp, 4
-    		sw $s1, 0($sp)
-    		
-    		#=== Setup Variables=========================================
-    		li $a3, 0		# a3 = 0################
-    		li $t7, 0		# temp B[i] 
-    		
-    		MoveBullet:
-    		addi $a3, $a3, 4	# a3 = a3 + 4##########
-    		
-    		############################
-    		#======Get STATUS=========
-    		la $t6, BulletsHealth
-    		add $t6, $t6, $a3	# t6 = addr(STATUS) + a3
-    		lw $t2, 0($t6)		# Get Bullet Status
-    		beq $t2, 0, BulletEnd	# If Bullet is dead we skip Update
-    		############################
-    		
-    		#
-    		#	GET __X__ BULLET -> s1
-    		#
-    		la $t6, BulletsX
-    		add $t7, $t6, $a3	# t7 = addr(X) + a3
-    		lw $s1, 0($t7)		# s1 = (X)[i]
-    		
-    		
-    		#
-    		#	GET __Y__ BULLET -> s0
-    		#
-    		la $t6, BulletsY
-    		add $t7, $t6, $a3	# t7 = addr(Y) + a3
-    		lw $s0, 0($t7)		# s0 = (Y)[i]
-    	####################REAL WORK BELOW########################
-    		
-    		
-    		
-    		li $t2, BASE_ADDRESS	# Reset BaseAddress
-    		jal caladdressFUNC	# Calculate Player Location
-    		add $t2, $t2, $s5	# Jumps to calculated address for printing
-    		
-    		addi $t2, $t2, 4
-    		lw $t1, 0($t2)
-    		addi $t2, $t2, -4
-    		beq $t1, WALL, BulletDeadPrep
-    		j White
-    		
-    		BulletDeadPrep:
-    		li $s1, 125
-    		la $t6, BulletsX
-    		add $t6, $t6, $a3	# t6 = addr(X) + a3
-    		
-    		addi $s1, $s1, 2	# X = +2 Pixels
-    		sw $s1, 0($t6)		# Saving X Location
-    		j BulletDead
-    		
-    		White:
-		li $t1, 0xffffff     	# Load Blue Color
-		
-		
-		
-		
-    		addi $t2, $t2, 4	# Move one Pixel Ahead
-    		sw $t1, 0($t2)     	# Paint Color On Bitmap
-    		addi $t2, $t2, 4	# Move one Pixel Ahead
-    		sw $t1, 0($t2)     	# Paint Color On Bitmap
-    		
-    		
-    		# Bullet Dead Condition
-    		beq $t2, WALL, ShipToEnd
-    		j SkipShipToEnd
-    		
-    		ShipToEnd:
-    		li $s1, 150
-    		
-    		SkipShipToEnd:
-    		
-    	###########################################################
-    	####################SAVE LOCATIONS####################
-    		#======SAVE X LOC=========
-    		la $t6, BulletsX
-    		add $t6, $t6, $a3	# t6 = addr(X) + a3
-    		
-    		addi $s1, $s1, 2	# X = +2 Pixels
-    		sw $s1, 0($t6)		# Saving X Location
-    		
-    		
-    		#======SAVE Y LOC=========
-    		la $t6, BulletsY
-    		add $t6, $t6, $a3	# t6 = addr(Y) + a3
-    		sw $s0, 0($t6)		# Saving Y Location
-    		j BulletEnd
-    		
-    		
-    		# Set Bullet TO Dead
-    		BulletDead:
-    		la $t6, BulletsHealth
-    		add $t6, $t6, $s3	# t6 = addr(STATUS) + k1
-    		li $t2, 0		# Set Bullet to Alive -> 1
-    		sw $t2, 0($t6)
-		#################
-    		
-    	###########################################################	      
-    		#===Bullet Loop Condition=====================	
-    		BulletEnd:	
-    		bne $a3, $k1, MoveBullet		# if a3 != k1
-    		j FinishBullet
-    		
-    		FinishBullet:
-    		li $a3, 0		# Reset a3 value to 0
-    		li $t8, 0		# Reset
-    		
-    		# Load X, Y from Stack
-    		lw $s1, 0($sp)
-    		addi $sp, $sp, -4
-    		lw $s0, 0($sp)
-    		addi $sp, $sp, -4	
-    		#=============================================
-    		j LevelUpdateComplete
-    		
-    	LevelUpdateComplete:
-    		j LevelOneLogic	
-	
-LevelTwoPrep:
-	# Builds Level Complete Screen
-    	la $t6, LevelComplete 
-    	li $t2, BASE_ADDRESS
-        buildCompleteScreenOne:
-         	lw $t1, 0($t6)    # Loads pixel from image
-         	sw $t1, 0($t2)    # Puts pixel into bitmap
-        	addi $t2, $t2, 4  # Move to next position on bitmap
-        	addi $t6, $t6, 4  # Move to next position on image
-        	bne $t2, $t4, buildCompleteScreenOne # if not at max -> restart loop
-	
-	# The following syscall makes the MIPS sleep for 3 seconds
-    		li $v0, 32
-    		li $a0, 3000
-    		syscall
-			
-	j END	
-		
-# =====================================================
-# Under this line are all Functions
-# So we avoid running them by default so we jump to END
-jumptoend: j END
-# =====================================================
-# =====================================================
+    	jr $ra
 KillHeart:
 		li $t1, 0x000000	# Load Yellow Color
 		# Save ra to stack
@@ -1270,6 +1295,7 @@ caladdressFUNC:
     jr $ra
     
 checkKeyboardInput:
+    li $t5, 0xffff0000
     lw $t8, 0($t5)                      #
     beq $t8, 0, Jumptocaller     	# Check if Keyboard is Pressed
     lw $t8, 4($t5)                      # Load Pressed Key
