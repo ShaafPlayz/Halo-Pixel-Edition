@@ -1,9 +1,4 @@
-##################################################################### 
-#
-# CSCB58 Winter 2025 Assembly Final Project
-# University of Toronto, Scarborough 
-#
-# Student: Muhammad Shaaf Yousaf, 1009524374, yousaf12, shaaf.yousaf@mail.utoronto.ca
+########################################################################
 #
 # Bitmap Display Configuration:
 # - Unit width in pixels: 4
@@ -11,54 +6,6 @@
 # - Display width in pixels: 512
 # - Display height in pixels: 256
 # - Base Address for Display: 0x10008000 ($gp)
-#
-# Which milestoneshave been reached in this submission? 
-#
-# - All of the Milestones
-#
-# - Pause Screen (An additional Unlisted Feature)
-# - Dissapearing Platform (Milestone 4)
-# - Start Menu (Milestone 4)
-# - Shoot Enemies/Coins (Milestone 4)
-# - Double Jump (Milestone 4)
-# - Player Looks in the direction it moves (An additional Unlisted gimmick)(Milestone 4)
-# - Player Shoots in the direction it looks (An additional Unlisted Feature)(Milestone 4)
-# - Just some splash screens to make it look cooler (Milestone 4)
-# - A loading screen (it does nothing except to look like it doing something) (Milestone 4)
-#
-#
-# Which approved features have been implemented for milestone 3? 
-# (See the assignment handout for the list of additional features) 
-# 1. Score Count (on Top Left there is a counter that shows the number of coins collected by player)
-# 2. Fail Condition (if player is not able to collect all coins and make their way to the helicopter, then
-#                    the game will count this as a fail. Even if the player collects 3 coins but they die
-#  					 then that means the player failed to complete the level) 
-# 3. Win Condition (the player collects three coins and makes their way to the helicopter to win the game)
-#
-# Link to video demonstration for final submission: 
-# - https://youtu.be/PhHweRzPkuk
-#
-# Are you OK with us sharing the video with people outside course staff? 
-# - yes, https://github.com/ShaafPlayz/Game-In-Assembly.git
-#
-# Any additional information that the TA needs to know:
-#
-# - Sometime the coin in the middle wont
-#   collect, just press "r" and try again it will work
-#
-# - The bullet would not penetrate the walls, but something for no 
-#   apparent reason it does which i have no idea why
-#
-# - If you spam press "d" or "a", it will allow it unless again for 
-#   no apparent reason Mars just crashes but this is rare
-#
-# - I dont think so there are any other bugs, but the coins 
-#   work really well like 90% of the time and all of a sudden
-#   one of them starts not working and I have no idea why
-#
-# - Sometimes, if you jump at the right moment and land inside
-#   the platform then the game would just act out and do something random
-#   usually this is not a restart level threat but its just annoying
 #
 ######################################################################
 .data
